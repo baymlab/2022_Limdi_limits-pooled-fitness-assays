@@ -8,7 +8,7 @@ Resolving deleterious and near-neutral effects requires different pooled fitness
 
 Anurag Limdi and Michael Baym
 
-In this project, we performed transposon sequencing of the ancestors and evolved clones after 50,000 generations of evolution to identify how the distribution of fitness effects and gene essentiality changes over evolution.
+In this project, we explored how assay parameters impact measurements of near-neutral and deleterious fitness effects, and whether the best design parameters differ for the specific fitness effect sizes that are relevant for the biological question under investigation. 
 
 ## Organization
 
