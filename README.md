@@ -4,7 +4,7 @@
 
 Code corresponding to the following paper:
 
-Resolving deleterious and near-neutral effects requires different pooled fitness assay designs
+[Resolving deleterious and near-neutral effects requires different pooled fitness assay designs](https://www.biorxiv.org/content/10.1101/2022.08.19.504558)
 
 Anurag Limdi and Michael Baym
 
