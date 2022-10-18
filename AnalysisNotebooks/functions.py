@@ -74,7 +74,6 @@ def fitness_estimate(counts_red, counts_green, locs, genes_lost, initial_depth, 
                 n_after_g = traj_green[t_start+1]
                 n_after_r = traj_red[t_start+1]
                 
-                #i'll find the first occurrence of zero if at all, and then fit a trajectory upto that point
                 #green replicate first
                 if np.min(traj_green):
                     sg = np.polyfit(time_gens, np.log(traj_green), 1)[0]
@@ -114,6 +113,35 @@ def fitness_estimate(counts_red, counts_green, locs, genes_lost, initial_depth, 
             stderr_fitness_inverse_var[gene] = sem_inv
             
     return fitness_inverse_var, stderr_fitness_inverse_var
+
+
+#calculating fitnesses
+def fitness_site(counts_red, counts_green, locs, genes_lost, initial_depth, t_start, t_end):
+    #select insertion mutations with at least a minimum number of reads at the start:
+    green = np.sum(counts_green,axis=1)
+    red = np.sum(counts_red, axis=1)
+    #initial depth is above threshold
+    condition1 = counts_green[t_start,:]/green[t_start]*10**7>initial_depth
+    condition2 = counts_red[t_start,:]/red[t_start]*10**7>initial_depth
+    #trajectories do not die out
+    condition3 = np.min(counts_green[t_start:t_end+1, :], axis=0) > 0
+    condition4 = np.min(counts_red[t_start:t_end+1, :], axis=0) > 0
+    nonzero_sites = np.where(condition1 & condition2 & condition3 & condition4)[0]
+#     print(nonzero_sites, len(nonzero_sites))
+    
+    fitnesses = []
+    
+    #defining time interval based on gene essentiality status:
+    time_gens = np.linspace(t_start,t_end,t_end-t_start+1)*6.64
+    #iterate over each site and calculate fitness:
+    for site in nonzero_sites:
+        traj_green = counts_green[:t_end+1, site]
+        traj_red = counts_red[:t_end+1, site]
+#         print(traj_green)
+        fitnesses.append((np.polyfit(time_gens[:t_end+1], np.log(traj_green), 1)[0] + np.polyfit(time_gens[:t_end+1], np.log(traj_red), 1)[0])*0.5)
+    
+    return fitnesses
+    
 
 def downsample(data, scale):
     """
@@ -187,3 +215,59 @@ def fitness_calculator(trajectories, n_gens):
     
     s_site = [np.polyfit(time_range, np.log(trajectories[i, :]), 1)[0] for i in range(sites) if np.min(trajectories[i,:]>0)]
     return np.mean(s_site), np.std(s_site)
+
+def fitness_calculator_replicates(trajectories, n_gens, reps, uncalculated_count=None):
+    """
+    trajectories: simulated data
+    n_gens: number of generations of selection per day
+    reps: number of replicates to average over for estimating fitness
+    """
+    time = trajectories.shape[1]
+    time_range = np.linspace(0, time-1, time)*n_gens
+    mutations = int(trajectories.shape[0]/reps)
+    s_mutation = np.zeros(mutations)-1
+    err_mutation = np.zeros(mutations)-1
+    
+    reps_used = []
+    
+    for i in range(mutations):
+        splice = trajectories[i:i+reps, :]
+        s_rep = [np.polyfit(time_range, np.log(splice[k, :]), 1)[0] for k in range(reps) if np.min(splice[k,:]>0)]
+        if np.size(s_rep)>1:
+            reps_used.append(np.size(s_rep))
+            err_mutation[i] = np.std(s_rep)/np.sqrt(len(s_rep)-1)
+            s_mutation[i] = np.mean(s_rep)
+    
+    num_uncalculated=np.sum(s_mutation==-1)
+    
+    if uncalculated_count==None:
+        return np.mean(s_mutation[s_mutation>-1]), np.mean(err_mutation[err_mutation>-1])
+    else:
+        return np.mean(s_mutation[s_mutation>-1]), np.mean(err_mutation[err_mutation>-1]), num_uncalculated, reps_used
+
+def bounds_estimator(coverage, t_library, t_recovery, t_assay, fitness_range):
+    """
+    Inputs:
+    coverage: what is the average number of counts per gene (in experiments)
+    t_library: number of generations of selection while constructing library
+    t_recovery: number of generations of recovery from freezer stock
+    t_assay: number of generations in the fitness assay
+    fitness_range: the range for which we want error bounds in fitness measurements
+    
+    Output:
+    upper and lower bound in fitness for each measurement
+    
+    """
+    
+    #t0 is the start of the fitness assay. 
+    #Assumption that all mutants exhibit exponential growth  
+    coverage_site_t0 = coverage*np.exp(fitness_range*(t_library+t_recovery))
+    #After the fitness assay
+    coverage_site_t1 = coverage_site_t0*np.exp(fitness_range*t_assay)
+    #bounds
+    upper = np.log((coverage_site_t1 + coverage_site_t1**0.5)/((coverage_site_t0 - coverage_site_t0**0.5)))/t_assay
+    lower = np.log((coverage_site_t1 - coverage_site_t1**0.5)/((coverage_site_t0 + coverage_site_t0**0.5)))/t_assay
+    
+    #returning bounds
+    
+    return upper, lower
